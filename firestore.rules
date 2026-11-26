@@ -1,0 +1,176 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidTrip(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.destination is string && data.destination.size() >= 1 && data.destination.size() <= 100 &&
+             data.startDate is string && data.startDate.size() >= 8 && data.startDate.size() <= 20 &&
+             data.endDate is string && data.endDate.size() >= 8 && data.endDate.size() <= 20 &&
+             (!('companions' in data) || (data.companions is string && data.companions.size() <= 120)) &&
+             data.budgetJpy is int && data.budgetJpy >= 0 && data.budgetJpy <= 100000000 &&
+             data.spentJpy is int && data.spentJpy >= 0 && data.spentJpy <= 100000000 &&
+             data.status in ['PLANNING', 'UPCOMING', 'ACTIVE', 'COMPLETED'] &&
+             (!('coverKey' in data) || (data.coverKey is string && data.coverKey.size() <= 60)) &&
+             (!('latitude' in data) || (data.latitude is number && data.latitude >= -90 && data.latitude <= 90)) &&
+             (!('longitude' in data) || (data.longitude is number && data.longitude >= -180 && data.longitude <= 180));
+    }
+
+    function isValidItineraryItem(data, userId, tripId) {
+      return data.userId is string && data.userId == userId &&
+             data.tripId is string && data.tripId == tripId &&
+             data.dayIndex is int && data.dayIndex >= 1 && data.dayIndex <= 60 &&
+             data.startTime is string && data.startTime.size() >= 4 && data.startTime.size() <= 16 &&
+             (!('endTime' in data) || (data.endTime is string && data.endTime.size() <= 16)) &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
+             data.category in ['TRANSIT', 'STAY', 'ACTIVITY', 'DINING', 'SPOT'] &&
+             data.locationName is string && data.locationName.size() >= 1 && data.locationName.size() <= 120 &&
+             (!('lineName' in data) || (data.lineName is string && data.lineName.size() <= 100)) &&
+             (!('platform' in data) || (data.platform is string && data.platform.size() <= 40)) &&
+             (!('carNumber' in data) || (data.carNumber is string && data.carNumber.size() <= 40)) &&
+             (!('seatNumber' in data) || (data.seatNumber is string && data.seatNumber.size() <= 40)) &&
+             (!('providerName' in data) || (data.providerName is string && data.providerName.size() <= 60)) &&
+             (!('bookingRef' in data) || (data.bookingRef is string && data.bookingRef.size() <= 80)) &&
+             (!('bookingUrl' in data) || (data.bookingUrl is string && data.bookingUrl.size() <= 500)) &&
+             data.costJpy is int && data.costJpy >= 0 && data.costJpy <= 100000000 &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 500)) &&
+             data.bookingStatus in ['PLANNED', 'CONFIRMED', 'CHECKED_IN', 'CANCELLED'];
+    }
+
+    function isValidChecklistItem(data, userId, tripId) {
+      return data.userId is string && data.userId == userId &&
+             data.tripId is string && data.tripId == tripId &&
+             data.label is string && data.label.size() >= 1 && data.label.size() <= 120 &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 60 &&
+             data.checked is bool;
+    }
+
+    function isValidSavedRoute(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.origin is string && data.origin.size() >= 1 && data.origin.size() <= 100 &&
+             data.destination is string && data.destination.size() >= 1 && data.destination.size() <= 100 &&
+             data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 180 &&
+             data.durationMinutes is int && data.durationMinutes >= 1 && data.durationMinutes <= 10080 &&
+             data.fareJpy is int && data.fareJpy >= 0 && data.fareJpy <= 10000000 &&
+             data.transfers is int && data.transfers >= 0 && data.transfers <= 30 &&
+             data.legsSummary is string && data.legsSummary.size() >= 1 && data.legsSummary.size() <= 400 &&
+             data.favorite is bool;
+    }
+
+    match /users/{userId}/trips/{tripId} {
+      allow get: if isOwner(userId) && isValidId(tripId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) &&
+                       isValidId(tripId) &&
+                       incoming().keys().hasAll(['userId', 'title', 'destination', 'startDate', 'endDate', 'budgetJpy', 'spentJpy', 'status', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'title', 'destination', 'startDate', 'endDate', 'companions', 'budgetJpy', 'spentJpy', 'status', 'coverKey', 'latitude', 'longitude', 'createdAt', 'updatedAt']) &&
+                       isValidTimestamp(incoming().createdAt) &&
+                       isValidTimestamp(incoming().updatedAt) &&
+                       isValidTrip(incoming(), userId);
+      allow update: if isOwner(userId) &&
+                       isValidId(tripId) &&
+                       isValidTrip(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidTimestamp(incoming().updatedAt) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['title', 'destination', 'startDate', 'endDate', 'companions', 'budgetJpy', 'spentJpy', 'status', 'coverKey', 'latitude', 'longitude', 'updatedAt']);
+      allow delete: if isOwner(userId) && isValidId(tripId);
+
+      match /items/{itemId} {
+        allow get: if isOwner(userId) && isValidId(tripId) && isValidId(itemId);
+        allow list: if isOwner(userId) && isValidId(tripId);
+        allow create: if isOwner(userId) &&
+                         isValidId(tripId) &&
+                         isValidId(itemId) &&
+                         incoming().keys().hasAll(['userId', 'tripId', 'dayIndex', 'startTime', 'title', 'category', 'locationName', 'costJpy', 'bookingStatus', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'tripId', 'dayIndex', 'startTime', 'endTime', 'title', 'category', 'locationName', 'lineName', 'platform', 'carNumber', 'seatNumber', 'providerName', 'bookingRef', 'bookingUrl', 'costJpy', 'notes', 'bookingStatus', 'createdAt', 'updatedAt']) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isValidItineraryItem(incoming(), userId, tripId) &&
+                         existsAfter(/databases/$(database)/documents/users/$(userId)/trips/$(tripId));
+        allow update: if isOwner(userId) &&
+                         isValidId(tripId) &&
+                         isValidId(itemId) &&
+                         isValidItineraryItem(incoming(), userId, tripId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().tripId == existing().tripId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['dayIndex', 'startTime', 'endTime', 'title', 'category', 'locationName', 'lineName', 'platform', 'carNumber', 'seatNumber', 'providerName', 'bookingRef', 'bookingUrl', 'costJpy', 'notes', 'bookingStatus', 'updatedAt']);
+        allow delete: if isOwner(userId) && isValidId(tripId) && isValidId(itemId);
+      }
+
+      match /checklist/{checkId} {
+        allow get: if isOwner(userId) && isValidId(tripId) && isValidId(checkId);
+        allow list: if isOwner(userId) && isValidId(tripId);
+        allow create: if isOwner(userId) &&
+                         isValidId(tripId) &&
+                         isValidId(checkId) &&
+                         incoming().keys().hasAll(['userId', 'tripId', 'label', 'category', 'checked', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'tripId', 'label', 'category', 'checked', 'createdAt', 'updatedAt']) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isValidChecklistItem(incoming(), userId, tripId) &&
+                         existsAfter(/databases/$(database)/documents/users/$(userId)/trips/$(tripId));
+        allow update: if isOwner(userId) &&
+                         isValidId(tripId) &&
+                         isValidId(checkId) &&
+                         isValidChecklistItem(incoming(), userId, tripId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().tripId == existing().tripId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['label', 'category', 'checked', 'updatedAt']);
+        allow delete: if isOwner(userId) && isValidId(tripId) && isValidId(checkId);
+      }
+    }
+
+    match /users/{userId}/savedRoutes/{routeId} {
+      allow get: if isOwner(userId) && isValidId(routeId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) &&
+                       isValidId(routeId) &&
+                       incoming().keys().hasAll(['userId', 'origin', 'destination', 'summary', 'durationMinutes', 'fareJpy', 'transfers', 'legsSummary', 'favorite', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'origin', 'destination', 'summary', 'durationMinutes', 'fareJpy', 'transfers', 'legsSummary', 'favorite', 'createdAt', 'updatedAt']) &&
+                       isValidTimestamp(incoming().createdAt) &&
+                       isValidTimestamp(incoming().updatedAt) &&
+                       isValidSavedRoute(incoming(), userId);
+      allow update: if isOwner(userId) &&
+                       isValidId(routeId) &&
+                       isValidSavedRoute(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidTimestamp(incoming().updatedAt) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['summary', 'durationMinutes', 'fareJpy', 'transfers', 'legsSummary', 'favorite', 'updatedAt']);
+      allow delete: if isOwner(userId) && isValidId(routeId);
+    }
+  }
+}

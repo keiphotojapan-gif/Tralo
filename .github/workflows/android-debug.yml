@@ -1,0 +1,85 @@
+name: Android Debug Build & APK
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-debug:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Prepare environment and Firebase config
+        env:
+          ODPT_API_KEY: ${{ secrets.ODPT_API_KEY }}
+          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+        run: |
+          if [ ! -f .env ]; then
+            cp .env.example .env
+          fi
+          if [ -n "${ODPT_API_KEY}" ]; then
+            printf '\nODPT_API_KEY=%s\n' "${ODPT_API_KEY}" >> .env
+          fi
+          if [ -n "${GOOGLE_SERVICES_JSON_B64}" ]; then
+            printf '%s' "${GOOGLE_SERVICES_JSON_B64}" | base64 --decode > app/google-services.json
+          fi
+
+      - name: Run Unit Tests
+        run: |
+          if [ -x ./gradlew ]; then
+            ./gradlew :app:testDebugUnitTest --no-daemon
+          else
+            gradle :app:testDebugUnitTest --no-daemon
+          fi
+
+      - name: Run Android Lint
+        run: |
+          if [ -x ./gradlew ]; then
+            ./gradlew :app:lintDebug --no-daemon
+          else
+            gradle :app:lintDebug --no-daemon
+          fi
+
+      - name: Assemble Debug APK
+        run: |
+          if [ -x ./gradlew ]; then
+            ./gradlew :app:assembleDebug --no-daemon
+          else
+            gradle :app:assembleDebug --no-daemon
+          fi
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tralo-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload Lint Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tralo-lint-report
+          path: app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore

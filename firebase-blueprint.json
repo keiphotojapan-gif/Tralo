@@ -1,0 +1,273 @@
+{
+  "entities": {
+    "Trip": {
+      "title": "Trip",
+      "description": "A user-owned travel itinerary with dates, companions, and budget tracking.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "title": {
+          "type": "string",
+          "description": "Trip title."
+        },
+        "destination": {
+          "type": "string",
+          "description": "Primary destination city or region."
+        },
+        "startDate": {
+          "type": "string",
+          "description": "Start date in YYYY-MM-DD format."
+        },
+        "endDate": {
+          "type": "string",
+          "description": "End date in YYYY-MM-DD format."
+        },
+        "companions": {
+          "type": "string",
+          "description": "Companions description."
+        },
+        "budgetJpy": {
+          "type": "integer",
+          "description": "Planned trip budget in JPY."
+        },
+        "spentJpy": {
+          "type": "integer",
+          "description": "Tracked spending in JPY."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["PLANNING", "UPCOMING", "ACTIVE", "COMPLETED"],
+          "description": "Lifecycle status of the trip."
+        },
+        "coverKey": {
+          "type": "string",
+          "description": "Optional bundled cover artwork key."
+        },
+        "latitude": {
+          "type": "number",
+          "description": "Destination latitude for weather lookups."
+        },
+        "longitude": {
+          "type": "number",
+          "description": "Destination longitude for weather lookups."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": ["userId", "title", "destination", "startDate", "endDate", "budgetJpy", "spentJpy", "status", "createdAt", "updatedAt"]
+    },
+    "ItineraryItem": {
+      "title": "ItineraryItem",
+      "description": "A scheduled transit leg, hotel stay, sightseeing activity, or dining entry inside a trip.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "tripId": {
+          "type": "string",
+          "description": "Parent trip document ID."
+        },
+        "dayIndex": {
+          "type": "integer",
+          "description": "1-based day number in the itinerary."
+        },
+        "startTime": {
+          "type": "string",
+          "description": "Start time in HH:mm format."
+        },
+        "endTime": {
+          "type": "string",
+          "description": "Optional end time in HH:mm format."
+        },
+        "title": {
+          "type": "string",
+          "description": "Item title or transit segment."
+        },
+        "category": {
+          "type": "string",
+          "enum": ["TRANSIT", "STAY", "ACTIVITY", "DINING", "SPOT"],
+          "description": "Itinerary item category."
+        },
+        "locationName": {
+          "type": "string",
+          "description": "Station, hotel, or venue name."
+        },
+        "lineName": {
+          "type": "string",
+          "description": "Optional transit line or carrier name."
+        },
+        "platform": {
+          "type": "string",
+          "description": "Optional departure track or gate."
+        },
+        "carNumber": {
+          "type": "string",
+          "description": "Optional recommended or booked car number."
+        },
+        "seatNumber": {
+          "type": "string",
+          "description": "Optional seat assignment."
+        },
+        "providerName": {
+          "type": "string",
+          "description": "Optional booking provider (Booking.com, Klook, JR, etc.)."
+        },
+        "bookingRef": {
+          "type": "string",
+          "description": "Optional booking confirmation reference."
+        },
+        "bookingUrl": {
+          "type": "string",
+          "description": "Optional official partner booking or ticket URL."
+        },
+        "costJpy": {
+          "type": "integer",
+          "description": "Cost in JPY."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional traveler notes."
+        },
+        "bookingStatus": {
+          "type": "string",
+          "enum": ["PLANNED", "CONFIRMED", "CHECKED_IN", "CANCELLED"],
+          "description": "Reservation or execution status."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": ["userId", "tripId", "dayIndex", "startTime", "title", "category", "locationName", "costJpy", "bookingStatus", "createdAt", "updatedAt"]
+    },
+    "ChecklistItem": {
+      "title": "ChecklistItem",
+      "description": "A packing or pre-departure checklist item for a trip.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "tripId": {
+          "type": "string",
+          "description": "Parent trip document ID."
+        },
+        "label": {
+          "type": "string",
+          "description": "Checklist item label."
+        },
+        "category": {
+          "type": "string",
+          "description": "Checklist group such as 乗車券・書類 or 荷物."
+        },
+        "checked": {
+          "type": "boolean",
+          "description": "Completion flag."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": ["userId", "tripId", "label", "category", "checked", "createdAt", "updatedAt"]
+    },
+    "SavedRoute": {
+      "title": "SavedRoute",
+      "description": "A bookmarked or recent transit route saved by the user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "origin": {
+          "type": "string",
+          "description": "Departure station or place."
+        },
+        "destination": {
+          "type": "string",
+          "description": "Arrival station or place."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Short route headline."
+        },
+        "durationMinutes": {
+          "type": "integer",
+          "description": "Total travel duration in minutes."
+        },
+        "fareJpy": {
+          "type": "integer",
+          "description": "Total fare in JPY."
+        },
+        "transfers": {
+          "type": "integer",
+          "description": "Number of transfers."
+        },
+        "legsSummary": {
+          "type": "string",
+          "description": "Compact summary of transit legs."
+        },
+        "favorite": {
+          "type": "boolean",
+          "description": "Whether the route is pinned as a favorite."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": ["userId", "origin", "destination", "summary", "durationMinutes", "fareJpy", "transfers", "legsSummary", "favorite", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/trips/{tripId}": {
+      "schema": { "$ref": "#/entities/Trip" },
+      "description": "User-scoped travel itineraries."
+    },
+    "/users/{userId}/trips/{tripId}/items/{itemId}": {
+      "schema": { "$ref": "#/entities/ItineraryItem" },
+      "description": "Day-by-day scheduled stops, transit legs, stays, and bookings."
+    },
+    "/users/{userId}/trips/{tripId}/checklist/{checkId}": {
+      "schema": { "$ref": "#/entities/ChecklistItem" },
+      "description": "Travel day preparation and packing checklist."
+    },
+    "/users/{userId}/savedRoutes/{routeId}": {
+      "schema": { "$ref": "#/entities/SavedRoute" },
+      "description": "User-saved favorite and recent transit routes."
+    }
+  }
+}

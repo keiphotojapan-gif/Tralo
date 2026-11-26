@@ -1,0 +1,6 @@
+{
+  "name": "TRALO",
+  "description": "Integrated transit, itinerary, weather, reservation, and AI travel concierge platform for Android.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
