@@ -33,14 +33,23 @@ jobs:
       - name: Prepare environment and Firebase config
         env:
           ODPT_API_KEY: ${{ secrets.ODPT_API_KEY }}
+          EKISPERT_API_KEY: ${{ secrets.EKISPERT_API_KEY }}
+          MIXWAY_API_KEY: ${{ secrets.MIXWAY_API_KEY }}
+          JORUDAN_API_KEY: ${{ secrets.JORUDAN_API_KEY }}
+          NAVITIME_API_KEY: ${{ secrets.NAVITIME_API_KEY }}
+          JR_TRAINFORMATION_PROXY_URL: ${{ secrets.JR_TRAINFORMATION_PROXY_URL }}
+          JR_SHIKOKU_PROXY_URL: ${{ secrets.JR_SHIKOKU_PROXY_URL }}
           GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
         run: |
           if [ ! -f .env ]; then
             cp .env.example .env
           fi
-          if [ -n "${ODPT_API_KEY}" ]; then
-            printf '\nODPT_API_KEY=%s\n' "${ODPT_API_KEY}" >> .env
-          fi
+          for var in ODPT_API_KEY EKISPERT_API_KEY MIXWAY_API_KEY JORUDAN_API_KEY NAVITIME_API_KEY JR_TRAINFORMATION_PROXY_URL JR_SHIKOKU_PROXY_URL; do
+            val="${!var}"
+            if [ -n "${val}" ]; then
+              printf '\n%s=%s\n' "${var}" "${val}" >> .env
+            fi
+          done
           if [ -n "${GOOGLE_SERVICES_JSON_B64}" ]; then
             printf '%s' "${GOOGLE_SERVICES_JSON_B64}" | base64 --decode > app/google-services.json
           fi

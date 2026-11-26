@@ -33,16 +33,18 @@ class RetryInterceptor(private val maxRetries: Int = 2) : Interceptor {
 }
 
 object NetworkModule {
-    private val moshi: Moshi by lazy {
+    val moshi: Moshi by lazy {
         Moshi.Builder()
+            .add(OdptLocalizedTitleAdapter())
             .addLast(KotlinJsonAdapterFactory())
             .build()
     }
 
-    private val okHttpClient: OkHttpClient by lazy {
+    val okHttpClient: OkHttpClient by lazy {
         val logging = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BASIC
             redactHeader("Authorization")
+            redactHeader("X-RapidAPI-Key")
         }
         OkHttpClient.Builder()
             .connectTimeout(12, TimeUnit.SECONDS)
@@ -62,12 +64,66 @@ object NetworkModule {
             .create(OpenMeteoApi::class.java)
     }
 
-    val odptApi: OdptApi by lazy {
-        Retrofit.Builder()
-            .baseUrl("https://api.odpt.org/api/v4/")
-            .client(okHttpClient)
-            .addConverterFactory(MoshiConverterFactory.create(moshi))
-            .build()
-            .create(OdptApi::class.java)
-    }
+    fun createOdptApi(
+        baseUrl: String = "https://api.odpt.org/api/v4/",
+        client: OkHttpClient = okHttpClient
+    ): OdptApi = Retrofit.Builder()
+        .baseUrl(baseUrl)
+        .client(client)
+        .addConverterFactory(MoshiConverterFactory.create(moshi))
+        .build()
+        .create(OdptApi::class.java)
+
+    val odptApi: OdptApi by lazy { createOdptApi() }
+
+    fun createEkispertApi(
+        baseUrl: String = "https://api.ekispert.jp/",
+        client: OkHttpClient = okHttpClient
+    ): EkispertApi = Retrofit.Builder()
+        .baseUrl(baseUrl)
+        .client(client)
+        .build()
+        .create(EkispertApi::class.java)
+
+    val ekispertApi: EkispertApi by lazy { createEkispertApi() }
+
+    fun createMixwayApi(
+        baseUrl: String = "https://mixway.ekispert.jp/",
+        client: OkHttpClient = okHttpClient
+    ): MixwayApi = Retrofit.Builder()
+        .baseUrl(baseUrl)
+        .client(client)
+        .build()
+        .create(MixwayApi::class.java)
+
+    val mixwayApi: MixwayApi by lazy { createMixwayApi() }
+
+    fun createJrTrainformationApi(
+        baseUrl: String = "https://localhost.invalid/",
+        client: OkHttpClient = okHttpClient
+    ): JrTrainformationApi = Retrofit.Builder()
+        .baseUrl(if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/")
+        .client(client)
+        .build()
+        .create(JrTrainformationApi::class.java)
+
+    fun createJrShikokuRealtimeApi(
+        baseUrl: String = "https://localhost.invalid/",
+        client: OkHttpClient = okHttpClient
+    ): JrShikokuRealtimeApi = Retrofit.Builder()
+        .baseUrl(if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/")
+        .client(client)
+        .build()
+        .create(JrShikokuRealtimeApi::class.java)
+
+    fun createRestCountriesApi(
+        baseUrl: String = "https://restcountries.com/",
+        client: OkHttpClient = okHttpClient
+    ): RestCountriesApi = Retrofit.Builder()
+        .baseUrl(if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/")
+        .client(client)
+        .build()
+        .create(RestCountriesApi::class.java)
+
+    val restCountriesApi: RestCountriesApi by lazy { createRestCountriesApi() }
 }

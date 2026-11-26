@@ -254,4 +254,135 @@ class ExampleRobolectricTest {
 
         assertEquals("trip_kyoto" to "折りたたみ傘", addedChecklist)
     }
+
+    @Test
+    fun transitScreen_liveMapTabRendersTrainsAndInspectsDetailsOnTap() {
+        val sampleTrain = com.example.model.Train(
+            trainId = "odpt.Train:TokyoMetro.Ginza.A1001",
+            operatorId = "TokyoMetro",
+            lineId = "odpt.Railway:TokyoMetro.Ginza",
+            trainNumber = "A1001",
+            trainType = "各駅停車",
+            destination = "浅草",
+            direction = "Asakusa",
+            currentStation = "渋谷",
+            nextStation = "表参道",
+            actualPosition = com.example.model.TrainPosition(
+                trainId = "odpt.Train:TokyoMetro.Ginza.A1001",
+                latitude = 35.6612,
+                longitude = 139.7065,
+                bearing = 48f,
+                currentStation = "渋谷",
+                nextStation = "表参道",
+                progress = 0.45f,
+                delayMinutes = 2,
+                timestamp = "09:15",
+                dataSource = "ODPT",
+                confidence = 0.9f
+            ),
+            delayMinutes = 2,
+            realtimeStatus = "2分遅れ",
+            lastUpdated = "09:15"
+        )
+        var tappedTrainId: String? = null
+        composeRule.setContent {
+            TraloTheme {
+                TransitScreen(
+                    state = TransitSearchUiState(
+                        activeTab = com.example.viewmodel.TransitSectionTab.LIVE_POSITIONS,
+                        liveTrainsResult = com.example.model.ProviderResult.Success(
+                            data = listOf(sampleTrain),
+                            sourceName = "ODPT",
+                            updatedAt = "09:15"
+                        ),
+                        selectedTrainId = sampleTrain.trainId
+                    ),
+                    onOriginChange = {},
+                    onDestinationChange = {},
+                    onSwapStations = {},
+                    onTimeModeChange = {},
+                    onAdjustMinutes = {},
+                    onSortChange = {},
+                    onSeatChange = {},
+                    onMaxTransfersChange = {},
+                    onToggleMode = {},
+                    onSearch = {},
+                    onRefreshOdpt = {},
+                    onSelectOdptRailway = {},
+                    onSelectRoute = {},
+                    onSaveRoute = { _, _ -> },
+                    onAddRouteToTrip = {},
+                    onCoordinatesResolved = { _, _ -> },
+                    onClearStatusMessage = {},
+                    onSelectTrain = { tappedTrainId = it }
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("live_train_map_canvas").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_train_marker_A1001").performClick()
+        composeRule.waitForIdle()
+        assertEquals(null, tappedTrainId)
+        composeRule.onNodeWithTag("transit_live_map_list")
+            .performScrollToNode(hasTestTag("selected_train_detail_card"))
+        composeRule.onNodeWithTag("selected_train_detail_card").assertIsDisplayed()
+    }
+
+    @Test
+    fun transitScreen_coverageAndTimetableTabsDisplayAccurately() {
+        var currentTab = com.example.viewmodel.TransitSectionTab.TIMETABLE
+        composeRule.setContent {
+            TraloTheme {
+                TransitScreen(
+                    state = TransitSearchUiState(
+                        activeTab = currentTab,
+                        timetableResult = com.example.model.ProviderResult.Success(
+                            data = listOf(
+                                com.example.model.StationTimetable(
+                                    stationId = "odpt.Station:TokyoMetro.Ginza.Shibuya",
+                                    stationName = "渋谷",
+                                    lineId = "odpt.Railway:TokyoMetro.Ginza",
+                                    direction = "浅草方面",
+                                    departureTime = "09:04",
+                                    trainType = "各停",
+                                    destination = "浅草",
+                                    platform = "2",
+                                    trainNumber = "A0904",
+                                    source = "ODPT"
+                                )
+                            ),
+                            sourceName = "ODPT",
+                            updatedAt = "09:00"
+                        )
+                    ),
+                    onOriginChange = {},
+                    onDestinationChange = {},
+                    onSwapStations = {},
+                    onTimeModeChange = {},
+                    onAdjustMinutes = {},
+                    onSortChange = {},
+                    onSeatChange = {},
+                    onMaxTransfersChange = {},
+                    onToggleMode = {},
+                    onSearch = {},
+                    onRefreshOdpt = {},
+                    onSelectOdptRailway = {},
+                    onSelectRoute = {},
+                    onSaveRoute = { _, _ -> },
+                    onAddRouteToTrip = {},
+                    onCoordinatesResolved = { _, _ -> },
+                    onClearStatusMessage = {},
+                    onSelectTab = { currentTab = it }
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("transit_tab_timetable").assertIsDisplayed()
+        composeRule.onNodeWithTag("transit_tab_coverage").assertIsDisplayed()
+        composeRule.onNodeWithTag("transit_timetable_list")
+            .performScrollToNode(hasTestTag("timetable_results_card"))
+        composeRule.onNodeWithTag("timetable_results_card").assertIsDisplayed()
+    }
 }

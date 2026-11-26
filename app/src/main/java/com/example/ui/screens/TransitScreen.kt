@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -75,6 +76,7 @@ import androidx.core.content.ContextCompat
 import com.example.core.PartnerLinks
 import com.example.model.DataProvenance
 import com.example.model.OdptApiState
+import com.example.model.RouteResult
 import com.example.model.SeatPreference
 import com.example.model.SortPreference
 import com.example.model.StationFacilityInfo
@@ -83,6 +85,10 @@ import com.example.model.TransitLeg
 import com.example.model.TransitRouteOption
 import com.example.model.TransportMode
 import com.example.ui.components.BadgeTone
+import com.example.ui.components.LiveTrainMapPanel
+import com.example.ui.components.OperatorCoverageSection
+import com.example.ui.components.StationTimetableSection
+import com.example.ui.components.TraloCalendarPickerDialog
 import com.example.ui.components.TraloCard
 import com.example.ui.components.TraloEditorialSectionHeader
 import com.example.ui.components.TraloEmptyState
@@ -93,6 +99,7 @@ import com.example.ui.components.TraloStatusBadge
 import com.example.ui.theme.TabularNumericLarge
 import com.example.ui.theme.TabularNumericMedium
 import com.example.viewmodel.TransitSearchUiState
+import com.example.viewmodel.TransitSectionTab
 import com.google.android.gms.location.LocationServices
 import java.text.NumberFormat
 import java.util.Locale
@@ -117,6 +124,17 @@ fun TransitScreen(
     onAddRouteToTrip: (TransitRouteOption) -> Unit,
     onCoordinatesResolved: (Double, Double) -> Unit,
     onClearStatusMessage: () -> Unit,
+    onSelectTab: (TransitSectionTab) -> Unit = {},
+    onSelectLineForMap: (String) -> Unit = {},
+    onSelectTrain: (String?) -> Unit = {},
+    onToggleAutoRefresh: (Boolean) -> Unit = {},
+    onRefreshLiveTrains: () -> Unit = {},
+    onTimetableStationQueryChange: (String) -> Unit = {},
+    onSearchTimetable: (String, String?) -> Unit = { _, _ -> },
+    onOperatorSearchQueryChange: (String) -> Unit = {},
+    onRegionFilterChange: (String) -> Unit = {},
+    onSelectOperator: (String) -> Unit = {},
+    onSearchDateChange: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -164,7 +182,209 @@ fun TransitScreen(
         }
     }
 
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+    val onRequestLocation: () -> Unit = {
+        val hasFine = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        val hasCoarse = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        if (hasFine || hasCoarse) {
+            fetchCurrentLocation()
+        } else {
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
+    val onVoiceDestination: () -> Unit = {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ja-JP")
+        }
+        runCatching { voiceDestLauncher.launch(intent) }
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        TransitModeSubTabBar(
+            activeTab = state.activeTab,
+            onSelectTab = onSelectTab
+        )
+
+        when (state.activeTab) {
+            TransitSectionTab.ROUTE_SEARCH -> {
+                RouteSearchTabContent(
+                    state = state,
+                    locationMessage = locationMessage,
+                    onOriginChange = onOriginChange,
+                    onDestinationChange = onDestinationChange,
+                    onSwapStations = onSwapStations,
+                    onRequestLocation = onRequestLocation,
+                    onVoiceDestination = onVoiceDestination,
+                    onTimeModeChange = onTimeModeChange,
+                    onAdjustMinutes = onAdjustMinutes,
+                    onSortChange = onSortChange,
+                    onSeatChange = onSeatChange,
+                    onMaxTransfersChange = onMaxTransfersChange,
+                    onToggleMode = onToggleMode,
+                    onSearch = onSearch,
+                    onRefreshOdpt = onRefreshOdpt,
+                    onSelectOdptRailway = onSelectOdptRailway,
+                    onSelectRoute = onSelectRoute,
+                    onSaveRoute = onSaveRoute,
+                    onAddRouteToTrip = onAddRouteToTrip,
+                    onClearStatusMessage = onClearStatusMessage,
+                    onOpenLiveMap = { onSelectTab(TransitSectionTab.LIVE_POSITIONS) },
+                    onSearchDateChange = onSearchDateChange
+                )
+            }
+
+            TransitSectionTab.LIVE_POSITIONS -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("transit_live_map_list"),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    item {
+                        TraloEditorialSectionHeader(
+                            englishOverline = "Live Train Telemetry",
+                            japaneseTitle = "全国鉄道 列車走行位置マップ"
+                        )
+                    }
+                    item {
+                        LiveTrainMapPanel(
+                            selectedLineId = state.selectedRailwayId,
+                            stations = state.liveLineStations,
+                            trainsResult = state.liveTrainsResult,
+                            operationStatusResult = state.operationStatusResult,
+                            isLoading = state.isLoadingTrains,
+                            selectedTrainId = state.selectedTrainId,
+                            autoRefreshEnabled = state.autoRefreshEnabled,
+                            cooldownSeconds = state.refreshCooldownSeconds,
+                            onSelectLine = onSelectLineForMap,
+                            onSelectTrain = onSelectTrain,
+                            onToggleAutoRefresh = onToggleAutoRefresh,
+                            onRefresh = onRefreshLiveTrains
+                        )
+                    }
+                    item { Spacer(modifier = Modifier.height(72.dp)) }
+                }
+            }
+
+            TransitSectionTab.TIMETABLE -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("transit_timetable_list"),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    item {
+                        TraloEditorialSectionHeader(
+                            englishOverline = "Station Timetables",
+                            japaneseTitle = "駅時刻表・発車標"
+                        )
+                    }
+                    item {
+                        StationTimetableSection(
+                            stationQuery = state.timetableStationQuery,
+                            timetableResult = state.timetableResult,
+                            isLoading = state.isLoadingTimetable,
+                            onStationQueryChange = onTimetableStationQueryChange,
+                            onSearchTimetable = onSearchTimetable
+                        )
+                    }
+                    item { Spacer(modifier = Modifier.height(72.dp)) }
+                }
+            }
+
+            TransitSectionTab.COVERAGE -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("transit_coverage_list"),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    item {
+                        TraloEditorialSectionHeader(
+                            englishOverline = "Nationwide API Coverage",
+                            japaneseTitle = "全国事業者・API対応調査一覧"
+                        )
+                    }
+                    item {
+                        OperatorCoverageSection(
+                            searchQuery = state.operatorSearchQuery,
+                            selectedRegion = state.selectedRegionFilter,
+                            onSearchQueryChange = onOperatorSearchQueryChange,
+                            onRegionChange = onRegionFilterChange,
+                            onInspectOperator = { opId ->
+                                onSelectOperator(opId)
+                                onSelectTab(TransitSectionTab.LIVE_POSITIONS)
+                            }
+                        )
+                    }
+                    item { Spacer(modifier = Modifier.height(72.dp)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TransitModeSubTabBar(
+    activeTab: TransitSectionTab,
+    onSelectTab: (TransitSectionTab) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(TransitSectionTab.entries, key = { it.name }) { tab ->
+            FilterChip(
+                selected = tab == activeTab,
+                onClick = { onSelectTab(tab) },
+                label = { Text(tab.labelJa) },
+                modifier = Modifier.testTag(tab.testTag)
+            )
+        }
+    }
+}
+
+@Composable
+private fun RouteSearchTabContent(
+    state: TransitSearchUiState,
+    locationMessage: String?,
+    onOriginChange: (String) -> Unit,
+    onDestinationChange: (String) -> Unit,
+    onSwapStations: () -> Unit,
+    onRequestLocation: () -> Unit,
+    onVoiceDestination: () -> Unit,
+    onTimeModeChange: (TimeQueryMode) -> Unit,
+    onAdjustMinutes: (Int) -> Unit,
+    onSortChange: (SortPreference) -> Unit,
+    onSeatChange: (SeatPreference) -> Unit,
+    onMaxTransfersChange: (Int?) -> Unit,
+    onToggleMode: (TransportMode) -> Unit,
+    onSearch: () -> Unit,
+    onRefreshOdpt: () -> Unit,
+    onSelectOdptRailway: (String) -> Unit,
+    onSelectRoute: (String) -> Unit,
+    onSaveRoute: (TransitRouteOption, Boolean) -> Unit,
+    onAddRouteToTrip: (TransitRouteOption) -> Unit,
+    onClearStatusMessage: () -> Unit,
+    onOpenLiveMap: () -> Unit,
+    onSearchDateChange: (String) -> Unit
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val isWide = maxWidth >= 760.dp
 
         if (isWide) {
@@ -185,43 +405,19 @@ fun TransitScreen(
                             onOriginChange = onOriginChange,
                             onDestinationChange = onDestinationChange,
                             onSwapStations = onSwapStations,
-                            onRequestLocation = {
-                                val hasFine = ContextCompat.checkSelfPermission(
-                                    context, Manifest.permission.ACCESS_FINE_LOCATION
-                                ) == PackageManager.PERMISSION_GRANTED
-                                val hasCoarse = ContextCompat.checkSelfPermission(
-                                    context, Manifest.permission.ACCESS_COARSE_LOCATION
-                                ) == PackageManager.PERMISSION_GRANTED
-                                if (hasFine || hasCoarse) {
-                                    fetchCurrentLocation()
-                                } else {
-                                    locationPermissionLauncher.launch(
-                                        arrayOf(
-                                            Manifest.permission.ACCESS_FINE_LOCATION,
-                                            Manifest.permission.ACCESS_COARSE_LOCATION
-                                        )
-                                    )
-                                }
-                            },
-                            onVoiceDestination = {
-                                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ja-JP")
-                                }
-                                runCatching { voiceDestLauncher.launch(intent) }
-                            },
+                            onRequestLocation = onRequestLocation,
+                            onVoiceDestination = onVoiceDestination,
                             onTimeModeChange = onTimeModeChange,
                             onAdjustMinutes = onAdjustMinutes,
                             onSortChange = onSortChange,
                             onSeatChange = onSeatChange,
                             onMaxTransfersChange = onMaxTransfersChange,
                             onToggleMode = onToggleMode,
-                            onSearch = onSearch
+                            onSearch = onSearch,
+                            onSearchDateChange = onSearchDateChange
                         )
                     }
-                    item {
-                        StationFacilityCard(state.originFacility)
-                    }
+                    item { StationFacilityCard(state.originFacility) }
                 }
 
                 LazyColumn(
@@ -229,9 +425,10 @@ fun TransitScreen(
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     if (!state.statusMessage.isNullOrBlank()) {
-                        item {
-                            TraloInfoNotice(title = "通知", body = state.statusMessage)
-                        }
+                        item { TraloInfoNotice(title = "通知", body = state.statusMessage) }
+                    }
+                    if (!state.routeProviderNotice.isNullOrBlank()) {
+                        item { TraloInfoNotice(title = "経路データソース: ${state.routeSourceSummary}", body = state.routeProviderNotice) }
                     }
                     item {
                         TraloEditorialSectionHeader(
@@ -251,8 +448,10 @@ fun TransitScreen(
                         }
                     } else {
                         items(state.routes, key = { it.id }) { route ->
+                            val rich = state.routeResults.firstOrNull { it.id == route.id }
                             RouteComparisonCard(
                                 route = route,
+                                richRoute = rich,
                                 isExpanded = route.id == state.selectedRouteId,
                                 onToggleExpand = { onSelectRoute(route.id) },
                                 onBookmark = { onSaveRoute(route, true) },
@@ -265,7 +464,8 @@ fun TransitScreen(
                             odptState = state.odptState,
                             selectedRailwayId = state.selectedRailwayId,
                             onSelectRailway = onSelectOdptRailway,
-                            onRefresh = onRefreshOdpt
+                            onRefresh = onRefreshOdpt,
+                            onOpenLiveMap = onOpenLiveMap
                         )
                     }
                 }
@@ -291,48 +491,32 @@ fun TransitScreen(
                         onOriginChange = onOriginChange,
                         onDestinationChange = onDestinationChange,
                         onSwapStations = onSwapStations,
-                        onRequestLocation = {
-                            val hasFine = ContextCompat.checkSelfPermission(
-                                context, Manifest.permission.ACCESS_FINE_LOCATION
-                            ) == PackageManager.PERMISSION_GRANTED
-                            val hasCoarse = ContextCompat.checkSelfPermission(
-                                context, Manifest.permission.ACCESS_COARSE_LOCATION
-                            ) == PackageManager.PERMISSION_GRANTED
-                            if (hasFine || hasCoarse) {
-                                fetchCurrentLocation()
-                            } else {
-                                locationPermissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION
-                                    )
-                                )
-                            }
-                        },
-                        onVoiceDestination = {
-                            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ja-JP")
-                            }
-                            runCatching { voiceDestLauncher.launch(intent) }
-                        },
+                        onRequestLocation = onRequestLocation,
+                        onVoiceDestination = onVoiceDestination,
                         onTimeModeChange = onTimeModeChange,
                         onAdjustMinutes = onAdjustMinutes,
                         onSortChange = onSortChange,
                         onSeatChange = onSeatChange,
                         onMaxTransfersChange = onMaxTransfersChange,
                         onToggleMode = onToggleMode,
-                        onSearch = onSearch
+                        onSearch = onSearch,
+                        onSearchDateChange = onSearchDateChange
                     )
                 }
 
                 if (!state.statusMessage.isNullOrBlank()) {
                     item {
-                        TraloInfoNotice(
-                            title = "ステータス",
-                            body = state.statusMessage
-                        )
+                        TraloInfoNotice(title = "ステータス", body = state.statusMessage)
                         TextButton(onClick = onClearStatusMessage) { Text("閉じる") }
+                    }
+                }
+
+                if (!state.routeProviderNotice.isNullOrBlank()) {
+                    item {
+                        TraloInfoNotice(
+                            title = "取得元: ${state.routeSourceSummary}",
+                            body = state.routeProviderNotice
+                        )
                     }
                 }
 
@@ -355,8 +539,10 @@ fun TransitScreen(
                     }
                 } else {
                     items(state.routes, key = { it.id }) { route ->
+                        val rich = state.routeResults.firstOrNull { it.id == route.id }
                         RouteComparisonCard(
                             route = route,
+                            richRoute = rich,
                             isExpanded = route.id == state.selectedRouteId,
                             onToggleExpand = { onSelectRoute(route.id) },
                             onBookmark = { onSaveRoute(route, true) },
@@ -365,16 +551,15 @@ fun TransitScreen(
                     }
                 }
 
-                item {
-                    StationFacilityCard(state.originFacility)
-                }
+                item { StationFacilityCard(state.originFacility) }
 
                 item {
                     OdptLiveStatusPanel(
                         odptState = state.odptState,
                         selectedRailwayId = state.selectedRailwayId,
                         onSelectRailway = onSelectOdptRailway,
-                        onRefresh = onRefreshOdpt
+                        onRefresh = onRefreshOdpt,
+                        onOpenLiveMap = onOpenLiveMap
                     )
                 }
 
@@ -400,7 +585,8 @@ private fun TransitSearchControlsCard(
     onSeatChange: (SeatPreference) -> Unit,
     onMaxTransfersChange: (Int?) -> Unit,
     onToggleMode: (TransportMode) -> Unit,
-    onSearch: () -> Unit
+    onSearch: () -> Unit,
+    onSearchDateChange: (String) -> Unit
 ) {
     TraloCard {
         Row(
@@ -461,18 +647,29 @@ private fun TransitSearchControlsCard(
         }
 
         Spacer(modifier = Modifier.height(10.dp))
-        // Time specification row
+        var showCalendarDialog by remember { mutableStateOf(false) }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(Icons.Outlined.Schedule, contentDescription = null, modifier = Modifier.size(18.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.clickable { showCalendarDialog = true }
+            ) {
+                Icon(Icons.Outlined.Schedule, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                 Text(
-                    text = "%02d:%02d %s".format(state.hour, state.minute, state.timeMode.labelJa),
+                    text = "検索日: ${state.searchDateYyyyMmDd}  %02d:%02d (%s)".format(state.hour, state.minute, state.timeMode.labelJa),
                     style = TabularNumericMedium
                 )
+                OutlinedButton(
+                    onClick = { showCalendarDialog = true },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier.testTag("open_calendar_picker_button")
+                ) {
+                    Text("カレンダー変更", style = MaterialTheme.typography.labelSmall)
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 OutlinedButton(
@@ -484,6 +681,16 @@ private fun TransitSearchControlsCard(
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                 ) { Text("+30分") }
             }
+        }
+
+        if (showCalendarDialog) {
+            TraloCalendarPickerDialog(
+                onDateSelected = { dateStr ->
+                    onSearchDateChange(dateStr)
+                    showCalendarDialog = false
+                },
+                onDismiss = { showCalendarDialog = false }
+            )
         }
 
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -581,6 +788,7 @@ private fun TransitSearchControlsCard(
 @Composable
 private fun RouteComparisonCard(
     route: TransitRouteOption,
+    richRoute: RouteResult?,
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
     onBookmark: () -> Unit,
@@ -637,8 +845,8 @@ private fun RouteComparisonCard(
 
         if (route.tags.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                route.tags.take(3).forEach { tag ->
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(route.tags.take(4)) { tag ->
                     TraloStatusBadge(label = tag, tone = BadgeTone.GOLD)
                 }
             }
@@ -649,13 +857,26 @@ private fun RouteComparisonCard(
             TraloStatusBadge(label = "運行情報: ${route.delayAlert}", tone = BadgeTone.AMBER)
         }
 
+        if (richRoute?.alternativeSuggested == true) {
+            Spacer(modifier = Modifier.height(6.dp))
+            TraloStatusBadge(
+                label = "遅延検知: 乗換時刻予測と別経路の検討を推奨 (${richRoute.realtimeStatus})",
+                tone = BadgeTone.AMBER
+            )
+        }
+
         AnimatedVisibility(visible = isExpanded) {
             Column(modifier = Modifier.padding(top = 12.dp)) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Spacer(modifier = Modifier.height(10.dp))
                 route.legs.forEachIndexed { idx, leg ->
+                    val richLeg = richRoute?.legs?.getOrNull(idx)
                     TransitLegRow(
                         leg = leg,
+                        predictedArrival = richLeg?.predictedArrivalTime,
+                        operationStatus = richLeg?.operationStatus,
+                        delayMinutes = richLeg?.delayMinutes ?: 0,
+                        transferFeasible = richLeg?.transferFeasible ?: true,
                         onOpenPartner = { url -> PartnerLinks.openExternalUrl(context, url) }
                     )
                     if (idx < route.legs.lastIndex) {
@@ -698,6 +919,10 @@ private fun RouteComparisonCard(
 @Composable
 private fun TransitLegRow(
     leg: TransitLeg,
+    predictedArrival: String?,
+    operationStatus: String?,
+    delayMinutes: Int,
+    transferFeasible: Boolean,
     onOpenPartner: (String) -> Unit
 ) {
     Surface(
@@ -723,8 +948,13 @@ private fun TransitLegRow(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
+                val timeLabel = if (delayMinutes > 0 && !predictedArrival.isNullOrBlank()) {
+                    "${leg.departureTime} - $predictedArrival (+${delayMinutes}分)"
+                } else {
+                    "${leg.departureTime} - ${leg.arrivalTime}"
+                }
                 Text(
-                    text = "${leg.departureTime} - ${leg.arrivalTime}",
+                    text = timeLabel,
                     style = TabularNumericMedium
                 )
             }
@@ -735,6 +965,18 @@ private fun TransitLegRow(
                 Text(leg.arrivalStation, style = MaterialTheme.typography.bodyMedium)
                 if (leg.platform.isNotBlank()) {
                     TraloStatusBadge(label = leg.platform, tone = BadgeTone.NEUTRAL)
+                }
+            }
+
+            if (!operationStatus.isNullOrBlank()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TraloStatusBadge(
+                        label = operationStatus,
+                        tone = if (delayMinutes > 0 || operationStatus.contains("見合わせ")) BadgeTone.AMBER else BadgeTone.FOREST
+                    )
+                    if (!transferFeasible) {
+                        TraloStatusBadge(label = "乗換注意", tone = BadgeTone.AMBER)
+                    }
                 }
             }
 
@@ -834,7 +1076,8 @@ private fun OdptLiveStatusPanel(
     odptState: OdptApiState,
     selectedRailwayId: String,
     onSelectRailway: (String) -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onOpenLiveMap: () -> Unit
 ) {
     TraloCard {
         Row(
@@ -849,6 +1092,9 @@ private fun OdptLiveStatusPanel(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            TextButton(onClick = onOpenLiveMap) {
+                Text("マップで開く")
             }
             IconButton(onClick = onRefresh, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Outlined.Refresh, contentDescription = "運行状況を更新")

@@ -97,6 +97,7 @@ fun HomeScreen(
     onSelectTrip: (String) -> Unit,
     onCreateStarterTrip: () -> Unit,
     onRefreshWeather: () -> Unit,
+    appSettings: com.example.model.AppSettings = com.example.model.AppSettings(),
     modifier: Modifier = Modifier
 ) {
     var originInput by remember { mutableStateOf("東京") }
@@ -411,6 +412,7 @@ fun HomeScreen(
                             trips.take(3).forEach { trip ->
                                 SavedTripSummaryCard(
                                     trip = trip,
+                                    appSettings = appSettings,
                                     isSelected = trip.id == activeTrip?.id,
                                     onClick = {
                                         onSelectTrip(trip.id)
@@ -574,10 +576,10 @@ private fun QuickActionTile(
 @Composable
 private fun SavedTripSummaryCard(
     trip: Trip,
+    appSettings: com.example.model.AppSettings,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val formatter = NumberFormat.getNumberInstance(Locale.JAPAN)
     val progress = if (trip.budgetJpy > 0L) {
         (trip.spentJpy.toFloat() / trip.budgetJpy.toFloat()).coerceIn(0f, 1f)
     } else 0f
@@ -625,7 +627,7 @@ private fun SavedTripSummaryCard(
                 )
             }
             Text(
-                text = "¥${formatter.format(trip.spentJpy)} / ¥${formatter.format(trip.budgetJpy)}",
+                text = "${appSettings.formatCurrency(trip.spentJpy)} / ${appSettings.formatCurrency(trip.budgetJpy)}",
                 style = TabularNumericMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )

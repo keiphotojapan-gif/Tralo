@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.DirectionsTransit
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.FlightTakeoff
 import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -76,6 +77,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.core.OdptConfig
+import com.example.core.TraloLocalization
 import com.example.core.configureAppCheck
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.authStateFlow
@@ -85,11 +87,13 @@ import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.ConciergeScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.ItineraryScreen
+import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.TodayScreen
 import com.example.ui.screens.TransitScreen
 import com.example.ui.theme.TraloTheme
 import com.example.viewmodel.ConciergeViewModel
 import com.example.viewmodel.HomeAndTripsViewModel
+import com.example.viewmodel.SettingsViewModel
 import com.example.viewmodel.TraloViewModelFactories
 import com.example.viewmodel.TransitViewModel
 import com.example.viewmodel.UiState
@@ -102,6 +106,7 @@ object TraloRoutes {
     const val TRANSIT = "transit"
     const val ITINERARY = "itinerary"
     const val TODAY = "today"
+    const val SETTINGS = "settings"
 }
 
 private enum class TraloNavItem(
@@ -188,7 +193,12 @@ fun TraloAuthenticatedShell(
         key = "concierge_$currentUserId",
         factory = TraloViewModelFactories.conciergeFactory(currentUserId)
     )
+    val settingsVm: SettingsViewModel = viewModel(
+        key = "settings_$currentUserId",
+        factory = TraloViewModelFactories.settingsFactory()
+    )
 
+    val appSettings by settingsVm.settings.collectAsStateWithLifecycle()
     val tripsState by homeTripsVm.tripsState.collectAsStateWithLifecycle()
     val activeTrip by homeTripsVm.activeTrip.collectAsStateWithLifecycle()
     val activeItemsState by homeTripsVm.activeTripItemsState.collectAsStateWithLifecycle()
@@ -308,8 +318,8 @@ fun TraloAuthenticatedShell(
                                 navigateTab(item.route)
                                 drawerScope.launch { drawerState.close() }
                             },
-                            icon = { Icon(item.unselectedIcon, contentDescription = item.label) },
-                            label = { Text(item.label) }
+                            icon = { Icon(item.unselectedIcon, contentDescription = TraloLocalization.getNavLabel(item.route, appSettings.language)) },
+                            label = { Text(TraloLocalization.getNavLabel(item.route, appSettings.language)) }
                         )
                     }
                     NavigationDrawerItem(
@@ -320,6 +330,16 @@ fun TraloAuthenticatedShell(
                         },
                         icon = { Icon(Icons.Outlined.AutoAwesome, contentDescription = "AIコンシェルジュ") },
                         label = { Text("AI トラベルコンシェルジュ") }
+                    )
+                    NavigationDrawerItem(
+                        selected = currentRoute == TraloRoutes.SETTINGS,
+                        onClick = {
+                            navigateTab(TraloRoutes.SETTINGS)
+                            drawerScope.launch { drawerState.close() }
+                        },
+                        icon = { Icon(Icons.Outlined.Settings, contentDescription = "設定") },
+                        label = { Text(TraloLocalization.getNavLabel("settings", appSettings.language)) },
+                        modifier = Modifier.testTag("nav_settings_drawer")
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     HorizontalDivider()
@@ -366,6 +386,14 @@ fun TraloAuthenticatedShell(
                                     TraloStatusBadge(label = trip.destination, tone = BadgeTone.GOLD)
                                 }
                             }
+                        },
+                        actions = {
+                            IconButton(
+                                onClick = { navigateTab(TraloRoutes.SETTINGS) },
+                                modifier = Modifier.testTag("settings_top_button")
+                            ) {
+                                Icon(Icons.Outlined.Settings, contentDescription = "設定")
+                            }
                         }
                     )
                 },
@@ -392,10 +420,10 @@ fun TraloAuthenticatedShell(
                                     icon = {
                                         Icon(
                                             imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
-                                            contentDescription = item.label
+                                            contentDescription = TraloLocalization.getNavLabel(item.route, appSettings.language)
                                         )
                                     },
-                                    label = { Text(item.label) },
+                                    label = { Text(TraloLocalization.getNavLabel(item.route, appSettings.language)) },
                                     modifier = Modifier.testTag(item.testTag)
                                 )
                             }
@@ -421,10 +449,10 @@ fun TraloAuthenticatedShell(
                                     icon = {
                                         Icon(
                                             imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
-                                            contentDescription = item.label
+                                            contentDescription = TraloLocalization.getNavLabel(item.route, appSettings.language)
                                         )
                                     },
-                                    label = { Text(item.label) },
+                                    label = { Text(TraloLocalization.getNavLabel(item.route, appSettings.language)) },
                                     modifier = Modifier.testTag(item.testTag)
                                 )
                             }
@@ -463,7 +491,8 @@ fun TraloAuthenticatedShell(
                                     } else {
                                         homeTripsVm.refreshWeather("東京", 35.6812, 139.7671, true)
                                     }
-                                }
+                                },
+                                appSettings = appSettings
                             )
                         }
 
@@ -486,7 +515,17 @@ fun TraloAuthenticatedShell(
                                 onSaveRoute = transitVm::saveRouteToCloud,
                                 onAddRouteToTrip = { option -> homeTripsVm.addRouteToActiveTrip(option) },
                                 onCoordinatesResolved = transitVm::setOriginFromCoordinates,
-                                onClearStatusMessage = transitVm::clearStatusMessage
+                                onClearStatusMessage = transitVm::clearStatusMessage,
+                                onSelectTab = transitVm::setActiveTab,
+                                onSelectLineForMap = transitVm::selectLineForMap,
+                                onSelectTrain = transitVm::selectTrain,
+                                onToggleAutoRefresh = transitVm::toggleAutoRefresh,
+                                onRefreshLiveTrains = transitVm::refreshLiveTrains,
+                                onTimetableStationQueryChange = transitVm::setTimetableStationQuery,
+                                onSearchTimetable = transitVm::loadStationTimetable,
+                                onOperatorSearchQueryChange = transitVm::setOperatorSearchQuery,
+                                onRegionFilterChange = transitVm::setRegionFilter,
+                                onSelectOperator = transitVm::selectOperator
                             )
                         }
 
@@ -510,7 +549,8 @@ fun TraloAuthenticatedShell(
                                         homeTripsVm.refreshWeather(trip.destination, trip.latitude, trip.longitude, true)
                                     }
                                 },
-                                onOpenConciergeWithPrompt = { prompt -> openConcierge(prompt) }
+                                onOpenConciergeWithPrompt = { prompt -> openConcierge(prompt) },
+                                appSettings = appSettings
                             )
                         }
 
@@ -534,6 +574,24 @@ fun TraloAuthenticatedShell(
                                 onToggleChecklist = homeTripsVm::toggleChecklistItem,
                                 onDeleteChecklist = homeTripsVm::deleteChecklistItem,
                                 onOpenConcierge = { prompt -> openConcierge(prompt) }
+                            )
+                        }
+
+                        composable(TraloRoutes.SETTINGS) {
+                            SettingsScreen(
+                                viewModel = settingsVm,
+                                onBack = { navigateTab(TraloRoutes.HOME) },
+                                onCreateTripForCountry = { country ->
+                                    homeTripsVm.createTrip(
+                                        title = "${country.getLocalizedName(appSettings.language)} 旅行",
+                                        destination = country.getLocalizedName(appSettings.language),
+                                        startDate = "2026-07-01",
+                                        endDate = "2026-07-07",
+                                        companions = "一人旅",
+                                        budgetJpy = 200000L
+                                    )
+                                    navigateTab(TraloRoutes.ITINERARY)
+                                }
                             )
                         }
                     }

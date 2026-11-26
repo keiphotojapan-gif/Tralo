@@ -39,6 +39,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -113,6 +114,7 @@ fun ItineraryScreen(
     onDeleteItem: (String, String) -> Unit,
     onRefreshWeather: () -> Unit,
     onOpenConciergeWithPrompt: (String) -> Unit,
+    appSettings: com.example.model.AppSettings = com.example.model.AppSettings(),
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -179,6 +181,7 @@ fun ItineraryScreen(
                         item {
                             TripHeaderOverviewCard(
                                 trip = trip,
+                                appSettings = appSettings,
                                 onToggleTodayActive = {
                                     val nextStatus = if (trip.statusEnum == TripStatus.ACTIVE) {
                                         TripStatus.UPCOMING
@@ -188,7 +191,7 @@ fun ItineraryScreen(
                                     onUpdateTripStatus(trip, nextStatus)
                                 },
                                 onOptimizeWithAi = {
-                                    onOpenConciergeWithPrompt("旅程「${trip.title}」（${trip.destination}、${trip.startDate}〜${trip.endDate}、予算¥${trip.budgetJpy}）の移動順と時間配分を最適化し、混雑回避や代替案を提案してください。")
+                                    onOpenConciergeWithPrompt("旅程「${trip.title}」（${trip.destination}、${trip.startDate}〜${trip.endDate}、予算${appSettings.formatCurrency(trip.budgetJpy)}）の移動順と時間配分を最適化し、混雑回避や代替案を提案してください。")
                                 },
                                 onDeleteTrip = { onDeleteTrip(trip.id) }
                             )
@@ -383,11 +386,18 @@ fun ItineraryScreen(
 @Composable
 private fun TripHeaderOverviewCard(
     trip: Trip,
+    appSettings: com.example.model.AppSettings,
     onToggleTodayActive: () -> Unit,
     onOptimizeWithAi: () -> Unit,
     onDeleteTrip: () -> Unit
 ) {
-    val fmt = NumberFormat.getNumberInstance(Locale.JAPAN)
+    val destinationCountry = com.example.data.remote.CuratedCountriesData.allCuratedCountries.firstOrNull {
+        trip.destination.contains(it.commonName, ignoreCase = true) ||
+            trip.destination.contains(it.getLocalizedName("ja"), ignoreCase = true) ||
+            trip.title.contains(it.commonName, ignoreCase = true) ||
+            trip.title.contains(it.getLocalizedName("ja"), ignoreCase = true)
+    } ?: com.example.data.remote.CuratedCountriesData.allCuratedCountries.first()
+
     val ratio = if (trip.budgetJpy > 0) (trip.spentJpy.toFloat() / trip.budgetJpy.toFloat()).coerceIn(0f, 1f) else 0f
 
     TraloCard {
@@ -397,15 +407,30 @@ private fun TripHeaderOverviewCard(
             verticalAlignment = Alignment.Top
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = trip.destination, style = MaterialTheme.typography.labelSmall, color = ChampagneGold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(destinationCountry.flagEmoji, style = MaterialTheme.typography.bodyMedium)
+                    Text(text = destinationCountry.getLocalizedName(appSettings.language), style = MaterialTheme.typography.labelSmall, color = ChampagneGold)
+                }
                 Text(text = trip.title, style = MaterialTheme.typography.headlineMedium)
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "${trip.startDate} 〜 ${trip.endDate}" +
                         if (trip.companions.isNotBlank()) " ・ 同行: ${trip.companions}" else "",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = "現地現在時刻: ${com.example.core.TraloLocalization.calculateDestinationLocalTime(destinationCountry.primaryTimezone)} (${com.example.core.TraloLocalization.calculateTimeDifference(destinationCountry.primaryTimezone)})",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    )
+                }
             }
             IconButton(onClick = onDeleteTrip, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Outlined.DeleteOutline, contentDescription = "旅程を削除", tint = MaterialTheme.colorScheme.error)
@@ -419,7 +444,7 @@ private fun TripHeaderOverviewCard(
         ) {
             Text("予算進捗", style = MaterialTheme.typography.labelMedium)
             Text(
-                text = "¥${fmt.format(trip.spentJpy)} / ¥${fmt.format(trip.budgetJpy)}",
+                text = "${appSettings.formatCurrency(trip.spentJpy)} / ${appSettings.formatCurrency(trip.budgetJpy)}",
                 style = TabularNumericMedium
             )
         }

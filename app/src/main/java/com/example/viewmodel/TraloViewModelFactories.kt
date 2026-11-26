@@ -57,4 +57,14 @@ object TraloViewModelFactories {
             )
         }
     }
+
+    fun settingsFactory(): ViewModelProvider.Factory = viewModelFactory {
+        initializer {
+            val app = checkNotNull(this[APPLICATION_KEY]) { "APPLICATION_KEY missing" }
+            SettingsViewModel(
+                settingsRepository = com.example.data.repository.AppSettingsRepository.getInstance(app),
+                countriesRepository = com.example.data.repository.CountriesRepository()
+            )
+        }
+    }
 }

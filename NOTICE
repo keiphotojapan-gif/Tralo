@@ -1,0 +1,20 @@
+TRALO Third-Party & Open-Source Reference Notice
+=================================================
+
+1. Ktraveller285/jr-trainformation (MIT License)
+   - Repository: https://github.com/Ktraveller285/jr-trainformation
+   - Copyright (c) Ktraveller285 and contributors
+   - License: MIT License (https://opensource.org/licenses/MIT)
+   - Usage in TRALO:
+     TRALO's `JrTrainformationAdapter` and `JrTrainformationJsonParser` are original,
+     independent Kotlin implementations written from scratch for Android. No source code
+     was copied verbatim; technical architecture and station-block mapping concepts were
+     referenced under the MIT License while excluding any direct unauthorized scraping of
+     JR West, JR Central, or JR Hokkaido internal web feeds.
+
+2. harukin/jrshikoku (No Open-Source License / All Rights Reserved)
+   - Repository: https://git.pcgf.io/harukin/jrshikoku/src/branch/master
+   - Usage in TRALO:
+     NO source code, assets, or personal API endpoints (`api.haruk.in`) from this
+     repository were copied or reused. `JrShikokuRealtimeAdapter` is a 100% independent
+     Kotlin implementation compliant with JR Shikoku Terms of Service.

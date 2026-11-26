@@ -29,11 +29,28 @@ class ExampleUnitTest {
             consumerKey: String,
             railwayId: String?
         ): List<OdptTrainDto> = emptyList()
+
+        override suspend fun getStations(
+            consumerKey: String,
+            railwayId: String?
+        ) = emptyList<com.example.data.remote.OdptStationDto>()
+
+        override suspend fun getRailways(
+            consumerKey: String,
+            operatorId: String?
+        ) = emptyList<com.example.data.remote.OdptRailwayDto>()
+
+        override suspend fun getStationTimetables(
+            consumerKey: String,
+            railwayId: String?,
+            stationId: String?
+        ) = emptyList<com.example.data.remote.OdptStationTimetableDto>()
     }
 
     @Test
     fun odptConfig_defaultPlaceholderIsNotConfigured() {
         assertFalse(OdptConfig.isConfigured())
+        assertEquals(55, com.example.data.remote.NationalRailwayRegistry.operators.size)
     }
 
     @Test
